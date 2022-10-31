@@ -5,15 +5,14 @@ from src.SPH import SPHsolver
 parser = argparse.ArgumentParser(description="2D SPH simulation as my own project")
 parser.add_argument("--height", type = float, default = 1.0)
 parser.add_argument("--width", type = float, default = 3.0)
-parser.add_argument("--num_particle", type = int, default = 100)
-parser.add_argument("--end_time", type = float, default = 5.0)
-parser.add_argument("--radius", type = float, default = 0.05)
-parser.add_argument("--dt", type = float, default = 1e-4)
-parser.add_argument("--mass", type = float, default = 1e-3),
+parser.add_argument("--num_particle", type = int, default = 256)
+parser.add_argument("--end_time", type = float, default = 1.0)
+parser.add_argument("--radius", type = float, default = 0.025)
+parser.add_argument("--dt", type = float, default = 2e-3)
 parser.add_argument("--mu", type = float, default = 0.1)
-parser.add_argument("--density", type = float, default = 1.0)
+parser.add_argument("--density", type = float, default = 1000.0)
 parser.add_argument("--sound_speed", type = float, default = 100)
-parser.add_argument("--g", type = float, default = 9.8),
+parser.add_argument("--g", type = float, default = 9.8)
 parser.add_argument("--kn", type = int, default = 2)
 parser.add_argument("--kernel_type", type = str, default = "gaussian")
 parser.add_argument("--cor_type", type = str, default = "KGC")
@@ -34,7 +33,6 @@ if __name__ == "__main__":
         ti = 0,
         tf = args['end_time'],
         dt = args['dt'],
-        m = args['mass'],
         mu = args['mu'],
         rho = args['density'],
         C = args['sound_speed'],

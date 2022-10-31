@@ -17,9 +17,9 @@ def compute_kernel(r:Union[np.ndarray, np.array], h : float, kernel_type : Liter
         
     if kernel_type == 'gaussian':
         C = 1 / np.sqrt(np.pi) / h
-        C = np.power(C, dims)
+        C = C ** dims
         W_Wd = C * np.exp(-r_abs*r_abs/h**2)
-        dW_Wd = C*(-2)*np.multiply(r,np.exp(-r_abs*r_abs/h**2).reshape(-1,1))
+        dW_Wd = C*(-2)*np.multiply(r, np.exp(-r_abs*r_abs/h**2).reshape(-1,1))
         
     elif kernel_type == 'quartic':
         pass
