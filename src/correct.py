@@ -50,5 +50,29 @@ def FPM(idx : int, adj_idx : np.array, r : np.ndarray, W_Wd : np.ndarray, dW_Wd:
     return W_Wd_cor, dW_Wd_cor
     
 # Decomposed Finite Point Method
-def DFPM():
-    pass
+def DFPM(idx : int, adj_idx : np.array, r : np.ndarray, W_Wd : np.ndarray, dW_Wd:np.ndarray, m : Union[np.ndarray, np.array], rho : Union[np.ndarray, np.array]):
+    
+    dims = r.shape[1]
+    dV = m / rho
+    
+    W_filter = np.sum(W_Wd * dV[adj_idx], axis = 0)
+    dW_Wd_filter = np.sum((r[adj_idx,:] - r[idx,:]).reshape(-1,dims) * dW_Wd * dV[adj_idx].reshape(-1,1), axis = 0)
+    
+    W_Wd_cor = W_Wd / W_filter
+    dW_Wd_cor = dW_Wd / dW_Wd_filter
+    
+    return W_Wd_cor, dW_Wd_cor
+    
+# Kernel Gradient Free SPH 
+def KGFSPH(idx : int, adj_idx : np.array, r : np.ndarray, W_Wd : np.ndarray, dW_Wd:np.ndarray, m : Union[np.ndarray, np.array], rho : Union[np.ndarray, np.array]):
+    
+    dims = r.shape[1]
+    dV = m / rho
+    
+    W_filter = np.sum(W_Wd * dV[adj_idx], axis = 0)
+    dW_Wd_filter = np.sum((r[adj_idx,:] - r[idx,:]).reshape(-1,dims) * dW_Wd * dV[adj_idx].reshape(-1,1), axis = 0)
+    
+    W_Wd_cor = W_Wd / W_filter
+    dW_Wd_cor = dW_Wd / dW_Wd_filter
+    
+    return W_Wd_cor, dW_Wd_cor

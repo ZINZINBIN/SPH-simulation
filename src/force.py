@@ -16,7 +16,7 @@ def compute_du_viscous(rho : np.array, mu : np.array, r : np.ndarray, m : np.arr
     r_abs = np.linalg.norm(r[adj_idx,:] - r[idx,:], axis = 1)
     rW = np.sum(r_rel * dW_Wd, axis = 1)
     partial = 2 * mu[idx] * m[adj_idx] / rho[adj_idx] / rho[idx] * rW / (r_abs * r_abs + eps)
-    du_dt = np.sum(partial.reshape(-1,1) * (u[adj_idx,:] - u[idx,:]), axis = 0) * (-1)
+    du_dt = np.sum(partial.reshape(-1,1) * (u[adj_idx,:] - u[idx,:]), axis = 0)
     return du_dt
     
 def compute_du_gravity(u : np.ndarray, idx : int, adj_idx : np.array, g : float):
