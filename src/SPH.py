@@ -198,34 +198,37 @@ class SPHsolver:
             if self.ptype[idx] <= 0:
                 adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
                 W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-                filter = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd * (self.ptype[adj_idx] == 1), axis = 0)
+                flt = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd * (self.ptype[adj_idx] == 1), axis = 0)
                 
-                if filter >= 0.005:
+                if flt >= 0.005:
                     m_rho = self.m[adj_idx] / self.rho[adj_idx]
                     m_rho = m_rho.reshape(-1,1)
                     is_particle = (self.ptype[adj_idx] == 1).reshape(-1,1)
-                    self.u[idx, :] = (-1) * np.sum(m_rho * self.u[adj_idx, :] * W_Wd.reshape(-1,1) * is_particle, axis = 0) / filter
-               
+                    self.u[idx, :] = (-1) * np.sum(m_rho * self.u[adj_idx, :] * W_Wd.reshape(-1,1) * is_particle, axis = 0) / flt
+              
+        ''' 
         # Neumann Boundary condition     
         for idx in range(0,self.Nt):
             if self.ptype[idx] <= 0:
                 adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
                 W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-                filter = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd * (self.ptype[adj_idx] == 1), axis = 0)
+                flt = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd * (self.ptype[adj_idx] == 1), axis = 0)
                 
-                if filter >= 0.005:
+                if flt >= 0.005:
                     m_rho = self.m[adj_idx] / self.rho[adj_idx]
                     m_rho = m_rho.reshape(-1,1)
                     is_particle = (self.ptype[adj_idx] == 1).reshape(-1,1)
                     
-                    self.P[idx] = np.sum(self.P[adj_idx] * self.m[adj_idx] / self.rho[adj_idx] * W_Wd.reshape(-1,1) * is_particle) / filter + np.sum(self.rho[adj_idx] * (self.r[adj_idx, 1] - self.r[idx, 1]) * self.g)
+                    self.P[idx] = np.sum(self.P[adj_idx] * self.m[adj_idx] / self.rho[adj_idx] * W_Wd.reshape(-1,1) * is_particle) / flt + np.sum(self.rho[adj_idx] * (self.r[adj_idx, 1] - self.r[idx, 1]) * self.g)
                     self.rho[idx] = self.P[idx] / self.C**2 + self.rho0[idx]
-    
+        '''
+        
     def update_momentum(self):
         
         for idx in range(0,self.Nt):
             adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
             W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
+            # W_Wd = self.shepard_filter(adj_idx, W_Wd)
             
             # if len(adj_idx) >= 2:
             #     W_Wd, dW_Wd = KGC(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
@@ -235,6 +238,11 @@ class SPHsolver:
  
             self.u[idx,:] = self.u[idx,:] + self.dt * du_dt * (self.ptype[idx] == 1).reshape(-1,1)
             self.r[idx,:] = self.r[idx,:] + self.dt * self.u[idx,:] * (self.ptype[idx] == 1).reshape(-1,1)
+            
+    def shepard_filter(self, adj_idx : np.array, W_Wd : np.ndarray):
+        flt_s = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd, axis = 0)
+        W_Wd /= flt_s
+        return W_Wd
             
 
 # Version 2 : use shepard filter and mass summation for density

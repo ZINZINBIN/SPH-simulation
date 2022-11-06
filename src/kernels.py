@@ -22,12 +22,39 @@ def compute_kernel(r:Union[np.ndarray, np.array], h : float, kernel_type : Liter
         dW_Wd = C*(-2)*np.multiply(r, np.exp(-r_abs*r_abs/h**2).reshape(-1,1))
         
     elif kernel_type == 'quartic':
+        if dims == 1:
+            alpha = 5 / 8 / h
+        elif dims == 2:
+            alpha = 7 / 4 / np.pi / h**2
+        else:
+            alpha = 21 / 16 / np.pi / h**2
         pass
     elif kernel_type == 'wendland2':
-        pass
+        if dims == 1:
+            alpha = 5 / 8 / h
+            W_Wd = alpha * (1-r_abs/2/h)**3 * (1+3*r_abs/2/h)
+            dW_Wd = np.multiply(r, (alpha/2/h*(-12*(1-r_abs/2/h)**2)/2/h).reshape(-1,1))
+        elif dims == 2:
+            alpha = 7 / 4 / np.pi / h**2
+            W_Wd = alpha * (1-r_abs/2/h)**3 * (1+3*r_abs/2/h)
+            dW_Wd = np.multiply(r, (alpha/2/h*(-20*(1-r_abs/2/h)**3)/2/h).reshape(-1,1))
+        else:
+            alpha = 21 / 16 / np.pi / h**2
+            W_Wd = alpha * (1-r_abs/2/h)**3 * (1+3*r_abs/2/h)
+            dW_Wd = np.multiply(r, (alpha/2/h*(-20*(1-r_abs/2/h)**3)/2/h).reshape(-1,1))
+            
     elif kernel_type == 'wendland4':
-        pass
-    elif kernel_type == 'wendland6':
-        pass
+        if dims == 1:
+            alpha = 3 / 4 / h
+            W_Wd = alpha * (1-r_abs/2/h)**5 * (1+5*r_abs/2/h+8*(r_abs/2/h)**2)
+            dW_Wd = np.multiply(r, (alpha/2/h*(-14*(1-r_abs/2/h)**4 *(1+4*r_abs/2/h))/2/h).reshape(-1,1))
+        elif dims == 2:
+            alpha = 9 / 4 / np.pi / h**2
+            W_Wd = alpha * (1-r_abs/2/h)**6 * (1+6*r_abs/2/h+35/3*(r_abs/2/h)**2)
+            dW_Wd = np.multiply(r, (alpha/2/h*(-56/3*(1-r_abs/2/h)**5 *(1+5*r_abs/2/h))/2/h).reshape(-1,1))
+        else:
+            alpha = 495 / 256/ h**3
+            W_Wd = alpha * (1-r_abs/2/h)**6 * (1+6*r_abs/2/h+35/3*(r_abs/2/h)**2)
+            dW_Wd = np.multiply(r, (alpha/2/h*(-56/3*(1-r_abs/2/h)**5 *(1+5*r_abs/2/h))/2/h).reshape(-1,1))
     
     return W_Wd, dW_Wd
