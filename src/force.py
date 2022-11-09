@@ -11,8 +11,10 @@ def compute_du_pressure(rho : np.array, m : np.array, C : float, idx : Union[int
     return du_dt
     
 def compute_du_viscous(rho : np.array, mu : np.array, r : np.ndarray, m : np.array, u : np.ndarray, idx : Union[int, np.array], adj_idx : np.array, dW_Wd : np.ndarray):
-    eps = 1e-6
-    r_rel = r[idx,:] - r[adj_idx,:]
+    eps = 1e-8
+    # r_rel = r[idx,:] - r[adj_idx,:]
+    
+    r_rel = r[adj_idx,:] - r[idx,:]
     r_abs = np.linalg.norm(r[adj_idx,:] - r[idx,:], axis = 1)
     rW = np.sum(r_rel * dW_Wd, axis = 1)
     partial = 2 * mu[idx] * m[adj_idx] / rho[adj_idx] / rho[idx] * rW / (r_abs * r_abs + eps)

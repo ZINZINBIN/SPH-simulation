@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import multiprocessing as mp
 from typing import Dict, Optional
 from src.kernels import compute_kernel
 from src.NNPS import NNPS
@@ -223,7 +224,7 @@ class SPHsolver:
                     is_particle = (self.ptype[adj_idx] == 1).reshape(-1,1)
                     self.u[idx, :] = (-1) * np.sum(m_rho * self.u[adj_idx, :] * W_Wd.reshape(-1,1) * is_particle, axis = 0) / flt
               
-        
+        ''' 
         # Neumann Boundary condition     
         for idx in range(0,self.Nt):
             if self.ptype[idx] <= 0:
@@ -236,11 +237,9 @@ class SPHsolver:
                     m_rho = m_rho.reshape(-1,1)
                     is_particle = (self.ptype[adj_idx] == 1).reshape(-1,1)
                     
-                    # self.P[idx] = np.sum(self.P[adj_idx] * self.m[adj_idx] / self.rho[adj_idx] * W_Wd.reshape(-1,1) * is_particle) / flt + np.sum(self.rho[adj_idx] * (self.r[adj_idx, 1] - self.r[idx, 1]) * self.g)
-                    self.P[idx] = np.sum(self.P[adj_idx] * self.m[adj_idx] / self.rho[adj_idx] * W_Wd.reshape(-1,1) * is_particle) + np.sum(self.rho[adj_idx] * (self.r[adj_idx, 1] - self.r[idx, 1]) * self.g)
-                    
+                    self.P[idx] = np.sum(self.P[adj_idx] * self.m[adj_idx] / self.rho[adj_idx] * W_Wd.reshape(-1,1) * is_particle) / flt + np.sum(self.rho[adj_idx] * (self.r[adj_idx, 1] - self.r[idx, 1]) * self.g)
                     self.rho[idx] = self.P[idx] / self.C**2 + self.rho0[idx]
-        
+        '''
         
     def update_momentum(self):
         
@@ -282,7 +281,6 @@ class SPHsolver:
                 self.r[idx,0] = 0
                 self.u[idx,0] *= (-1)
                 
-            # y-axis
             if self.r[idx,1] < 0:
                 self.r[idx,1] = 0
                 self.u[idx,1] *= (-1)
