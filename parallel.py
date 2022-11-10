@@ -1,8 +1,9 @@
 import numpy as np
 import argparse
-from src.SPH import SPHsolver
+import gc
+from src.SPH_parallel import SPHsolver
 
-parser = argparse.ArgumentParser(description="2D SPH simulation as my own project")
+parser = argparse.ArgumentParser(description="2D SPH simulation as my own project with multi-processing")
 parser.add_argument("--height", type = float, default = 2.0)
 parser.add_argument("--width", type = float, default = 10.0)
 parser.add_argument("--num_particle", type = int, default = 1024)
@@ -14,7 +15,7 @@ parser.add_argument("--density", type = float, default = 1000.0)
 parser.add_argument("--sound_speed", type = float, default = 256)
 parser.add_argument("--g", type = float, default = 9.8)
 parser.add_argument("--kn", type = int, default = 2)
-parser.add_argument("--tag", type = str, default = "simulation")
+parser.add_argument("--tag", type = str, default = "simulation-parallel")
 parser.add_argument("--kernel_type", type = str, default = "gaussian")
 parser.add_argument("--cor_type", type = str, default = "KGC")
 parser.add_argument("--use_bp", type = bool, default = False)

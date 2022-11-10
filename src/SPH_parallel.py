@@ -1,7 +1,6 @@
 import numpy as np
 import time
-import multiprocessing as mp
-from typing import Dict, Optional
+from typing import Dict, Optional, Callable, List
 from src.kernels import compute_kernel
 from src.NNPS import NNPS
 from src.correct import KGC, DFPM
@@ -9,6 +8,9 @@ from src.force import compute_pressure, compute_du_viscous, compute_du_pressure,
 from src.visualize import Monitor
 from tqdm.auto import tqdm
 from src.utils import seed_everything
+import multiprocessing
+from functools import partial
+import gc
 
 # For 2D SPH solver
 class SPHsolver:
@@ -26,6 +28,7 @@ class SPHsolver:
         kn : int = 2,
         kernel_type : str = 'gaussian',
         cor_type : str = 'DFPM',
+        use_bp : bool = False,
         plot_freq : int = 10,
         plot_boundary_particle : bool = False,
         boundary_info : Optional[Dict] = None,
@@ -49,6 +52,7 @@ class SPHsolver:
         self.cor_type = cor_type
         
         # boundary info
+        self.use_bp = use_bp
         self.boundary_info = boundary_info
         
         # initialize boundary with 2D shape
@@ -82,43 +86,85 @@ class SPHsolver:
             blit = True, 
             save_dir=save_dir
         )
+        
         self.verbose = verbose
+        
+        # multi-processing
+        self.n_jobs = multiprocessing.cpu_count()
+        
+        # buffer for multi-processing
+        self.P_tmp = np.zeros((self.Nt,))
+        self.rho_tmp = np.zeros((self.Nt,))
+        self.drho_dt_tmp = np.zeros((self.Nt,))
+        self.u_tmp = np.zeros_like(self.r)
+        self.du_dt_tmp = np.zeros_like(self.r)
+        
+        print("multi-processing : {}-cpu will be used".format(self.n_jobs))
+        
+        
+    def compute_per_process(self, idx : int, exec : Callable):
+        adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
+        W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
+        exec(idx, adj_idx, W_Wd, dW_Wd)        
+    
+    def compute_multi_process(self, exec : Callable):
+        
+        particles = [idx for idx in range(0,self.Nt)]
+        
+        pool = multiprocessing.Pool(processes=self.n_jobs)
+        compute_per_procs = partial(
+            self.compute_per_process,
+            exec = exec
+        )
+        
+        pool.map(compute_per_procs, particles)
+        pool.close()
+        pool.join()
         
     def animate(self):
         self.monitor.animate(self.update)
         
     def initialize_boundary(self):
         
-        h = self.boundary_info['height']
-        w = self.boundary_info['width']
-        dims = self.boundary_info['dims']
-        pad = self.boundary_info['pad']
-        
-        self.Nb = int(h/self.vol)*2 + int(w/self.vol)
-        self.Nb *= pad
-        self.Nt = self.Np + self.Nb
-        
-        self.r = np.zeros((self.Nt, dims))
-        self.ptype = np.ones((self.Nt,))
-        
-        # with padding
-        for idx_pad in range(0, int(pad)):
-            for idx in range(0,int(h/self.vol)):
-                self.r[idx + int(h/self.vol) * idx_pad,0] = -self.radius * (2 * idx_pad + 1)
-                self.r[idx + int(h/self.vol) * idx_pad,1] = self.radius * (2 * idx + 1)
-                self.ptype[idx + int(h/self.vol) * idx_pad] = 0
-                
-        for idx_pad in range(0, int(pad)):
-            for idx in range(0, int(w/self.vol)):
-                self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad,0] = self.radius * (2 * idx + 1)
-                self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad,1] = -self.radius * (2 * idx_pad + 1)
-                self.ptype[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad] = 0
-        
-        for idx_pad in range(0, int(pad)):
-            for idx in range(0,int(h/self.vol)):
-                self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * pad + int(h/self.vol) * idx_pad,1] = self.radius * (2 * idx + 1)
-                self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * pad + int(h/self.vol) * idx_pad,0] = w + self.radius *(2 * idx_pad + 1)
-                self.ptype[idx + int(h/self.vol) * pad+ int(w/self.vol) * pad + int(h/self.vol) * idx_pad] = 0
+        if self.use_bp:
+            
+            h = self.boundary_info['height']
+            w = self.boundary_info['width']
+            dims = self.boundary_info['dims']
+            pad = self.boundary_info['pad']
+            
+            self.Nb = int(h/self.vol)*2 + int(w/self.vol)
+            self.Nb *= pad
+            self.Nt = self.Np + self.Nb
+            
+            self.r = np.zeros((self.Nt, dims))
+            self.ptype = np.ones((self.Nt,))
+            
+            # with padding
+            for idx_pad in range(0, int(pad)):
+                for idx in range(0,int(h/self.vol)):
+                    self.r[idx + int(h/self.vol) * idx_pad,0] = -self.radius * (2 * idx_pad + 1)
+                    self.r[idx + int(h/self.vol) * idx_pad,1] = self.radius * (2 * idx + 1)
+                    self.ptype[idx + int(h/self.vol) * idx_pad] = 0
+                    
+            for idx_pad in range(0, int(pad)):
+                for idx in range(0, int(w/self.vol)):
+                    self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad,0] = self.radius * (2 * idx + 1)
+                    self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad,1] = -self.radius * (2 * idx_pad + 1)
+                    self.ptype[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad] = 0
+            
+            for idx_pad in range(0, int(pad)):
+                for idx in range(0,int(h/self.vol)):
+                    self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * pad + int(h/self.vol) * idx_pad,1] = self.radius * (2 * idx + 1)
+                    self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * pad + int(h/self.vol) * idx_pad,0] = w + self.radius *(2 * idx_pad + 1)
+                    self.ptype[idx + int(h/self.vol) * pad+ int(w/self.vol) * pad + int(h/self.vol) * idx_pad] = 0
+                    
+        else:
+            self.Nt = self.Np
+            dims = self.boundary_info['dims']
+            
+            self.r = np.zeros((self.Nt, dims))
+            self.ptype = np.ones((self.Nt,))
     
     def initialize_particles(self):
         
@@ -135,24 +181,24 @@ class SPHsolver:
             if h >= self.boundary_info['height'] * ratio:
                 h = self.radius
                 w += self.radius * 2
-                
+          
+      
     def update(self, t):
         
         if self.verbose:
             start_time = time.time()
         
         # mass conservation
-        self.update_mass()
-            
-        # boundary condition
-        self.update_boundary() 
+        self.compute_multi_process(self.update_mass)
         
+        # update pressure
+        self.P = compute_pressure(self.rho, self.rho0, self.C)
+            
         # momentum condition
-        self.update_momentum()
+        self.compute_multi_process(self.update_momentum)
         
         # correct reflection
-        self.correct_reflection()
-            
+        self.compute_multi_process(self.correct_reflection)
         
         # animation
         if self.plot_boundary_particle:
@@ -163,124 +209,39 @@ class SPHsolver:
         if self.verbose:
             end_time = time.time()
             print("# t = {:.3f}, run time : {:.3f}".format(t, end_time - start_time))
+            
+        # empty cache
+        gc.collect()
         
         return self.monitor.points,
-        
-    def solve(self):
-        
-        count = 0
-        
-        for t in tqdm(self.ts):
-            # mass conservation
-            self.update_mass()
-                
-            # boundary condition
-            self.update_boundary() 
-            
-            # momentum condition
-            self.update_momentum()
-            
-            # correct reflection
-            self.correct_reflection()
-            
-            if count % self.plot_freq == 0:
-                print("t = {:.6f}, umax = {:.3f}".format(t, np.max(np.linalg.norm(self.u, axis = 1))))
-                
-            count += 1
     
-    def update_mass(self): # using continuity equation
-        rho = np.zeros_like(self.rho)
-        drho_dt = np.zeros_like(self.rho)
-        P = np.zeros_like(self.P)
+    def update_mass(self, idx, adj_idx, W_Wd, dW_Wd):
+        self.drho_dt_tmp[idx] = self.rho[idx] * np.sum(self.m[adj_idx] / self.rho[adj_idx] * np.sum(dW_Wd * (self.u[idx] - self.u[adj_idx]), axis = 1), axis = 0)
+        self.rho[idx] += self.dt * self.drho_dt_tmp[idx]
         
-        for idx in range(0,self.Nt):
-            adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
-            W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-            
-            # if len(adj_idx) >= 2:
-            #     W_Wd, dW_Wd = KGC(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
-            #     W_Wd, dW_Wd = DFPM(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
-            
-            drho_dt[idx] = self.rho[idx] * np.sum(self.m[adj_idx] / self.rho[adj_idx] * np.sum(dW_Wd * (self.u[idx] - self.u[adj_idx]), axis = 1), axis = 0)
-            
-        # rho = self.rho + self.dt * drho_dt * (self.ptype == 1)
-        rho = self.rho + self.dt * drho_dt
-        P = compute_pressure(rho, self.rho0, self.C)
-        
-        self.rho = rho
-        self.P = P
-    
-    def update_boundary(self):
-        # No-Penetration condition
-        for idx in range(0,self.Nt):
-            if self.ptype[idx] <= 0:
-                adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
-                W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-                flt = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd * (self.ptype[adj_idx] == 1), axis = 0)
-                
-                if flt >= 0.005:
-                    m_rho = self.m[adj_idx] / self.rho[adj_idx]
-                    m_rho = m_rho.reshape(-1,1)
-                    is_particle = (self.ptype[adj_idx] == 1).reshape(-1,1)
-                    self.u[idx, :] = (-1) * np.sum(m_rho * self.u[adj_idx, :] * W_Wd.reshape(-1,1) * is_particle, axis = 0) / flt
-              
-        ''' 
-        # Neumann Boundary condition     
-        for idx in range(0,self.Nt):
-            if self.ptype[idx] <= 0:
-                adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
-                W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-                flt = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd * (self.ptype[adj_idx] == 1), axis = 0)
-                
-                if flt >= 0.005:
-                    m_rho = self.m[adj_idx] / self.rho[adj_idx]
-                    m_rho = m_rho.reshape(-1,1)
-                    is_particle = (self.ptype[adj_idx] == 1).reshape(-1,1)
-                    
-                    self.P[idx] = np.sum(self.P[adj_idx] * self.m[adj_idx] / self.rho[adj_idx] * W_Wd.reshape(-1,1) * is_particle) / flt + np.sum(self.rho[adj_idx] * (self.r[adj_idx, 1] - self.r[idx, 1]) * self.g)
-                    self.rho[idx] = self.P[idx] / self.C**2 + self.rho0[idx]
-        '''
-        
-    def update_momentum(self):
-        
-        for idx in range(0,self.Nt):
-            adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
-            W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-            # W_Wd = self.shepard_filter(adj_idx, W_Wd)
-            
-            # if len(adj_idx) >= 2:
-            #     W_Wd, dW_Wd = KGC(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
-            #     W_Wd, dW_Wd = DFPM(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
-            
-            du_dt = compute_du_pressure(self.rho, self.m, self.C, idx, adj_idx, dW_Wd) + compute_du_viscous(self.rho, self.mu, self.r, self.m, self.u, idx, adj_idx, dW_Wd) + compute_du_gravity(self.u, idx, adj_idx, self.g)
+    def update_momentum(self,idx, adj_idx, W_Wd, dW_Wd):
+        du_dt = compute_du_pressure(self.rho, self.m, self.C, idx, adj_idx, dW_Wd) + compute_du_viscous(self.rho, self.mu, self.r, self.m, self.u, idx, adj_idx, dW_Wd) + compute_du_gravity(self.u, idx, adj_idx, self.g)
  
-            self.u[idx,:] = self.u[idx,:] + self.dt * du_dt * (self.ptype[idx] == 1).reshape(-1,1)
-            self.r[idx,:] = self.r[idx,:] + self.dt * self.u[idx,:] * (self.ptype[idx] == 1).reshape(-1,1)
+        self.u[idx,:] = self.u[idx,:] + self.dt * du_dt * (self.ptype[idx] == 1).reshape(-1,1)
+        self.r[idx,:] = self.r[idx,:] + self.dt * self.u[idx,:] * (self.ptype[idx] == 1).reshape(-1,1)
             
     def shepard_filter(self, adj_idx : np.array, W_Wd : np.ndarray):
         flt_s = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd, axis = 0)
         W_Wd /= flt_s
         return W_Wd
     
-    def correct_reflection(self):
+    def correct_reflection(self, idx, adj_idx, W_Wd, dW_Wd):
         
-        # x-axis : closed for x = 0 and x = w
-        # y-axis : closed for y = 0
-    
         w = self.boundary_info['width']
-        
-        # reflection condition
-        for idx in range(0,self.Nt):
-    
-            # x-axis
-            if self.r[idx,0] > w:
-                self.r[idx,0] = w
-                self.u[idx,0] *= (-1)
-                
-            elif self.r[idx,0] < 0:
-                self.r[idx,0] = 0
-                self.u[idx,0] *= (-1)
-                
-            if self.r[idx,1] < 0:
-                self.r[idx,1] = 0
-                self.u[idx,1] *= (-1)
+
+        if self.r[idx,0] > w:
+            self.r[idx,0] = w
+            self.u[idx,0] *= (-1)
+            
+        elif self.r[idx,0] < 0:
+            self.r[idx,0] = 0
+            self.u[idx,0] *= (-1)
+            
+        if self.r[idx,1] < 0:
+            self.r[idx,1] = 0
+            self.u[idx,1] *= (-1)
