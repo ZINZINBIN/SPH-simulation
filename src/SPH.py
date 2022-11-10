@@ -25,6 +25,7 @@ class SPHsolver:
         kn : int = 2,
         kernel_type : str = 'gaussian',
         cor_type : str = 'DFPM',
+        use_bp : bool = False,
         plot_freq : int = 10,
         plot_boundary_particle : bool = False,
         boundary_info : Optional[Dict] = None,
@@ -48,6 +49,7 @@ class SPHsolver:
         self.cor_type = cor_type
         
         # boundary info
+        self.use_bp = use_bp
         self.boundary_info = boundary_info
         
         # initialize boundary with 2D shape
@@ -88,36 +90,46 @@ class SPHsolver:
         
     def initialize_boundary(self):
         
-        h = self.boundary_info['height']
-        w = self.boundary_info['width']
-        dims = self.boundary_info['dims']
-        pad = self.boundary_info['pad']
-        
-        self.Nb = int(h/self.vol)*2 + int(w/self.vol)
-        self.Nb *= pad
-        self.Nt = self.Np + self.Nb
-        
-        self.r = np.zeros((self.Nt, dims))
-        self.ptype = np.ones((self.Nt,))
-        
-        # with padding
-        for idx_pad in range(0, int(pad)):
-            for idx in range(0,int(h/self.vol)):
-                self.r[idx + int(h/self.vol) * idx_pad,0] = -self.radius * (2 * idx_pad + 1)
-                self.r[idx + int(h/self.vol) * idx_pad,1] = self.radius * (2 * idx + 1)
-                self.ptype[idx + int(h/self.vol) * idx_pad] = 0
-                
-        for idx_pad in range(0, int(pad)):
-            for idx in range(0, int(w/self.vol)):
-                self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad,0] = self.radius * (2 * idx + 1)
-                self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad,1] = -self.radius * (2 * idx_pad + 1)
-                self.ptype[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad] = 0
-        
-        for idx_pad in range(0, int(pad)):
-            for idx in range(0,int(h/self.vol)):
-                self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * pad + int(h/self.vol) * idx_pad,1] = self.radius * (2 * idx + 1)
-                self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * pad + int(h/self.vol) * idx_pad,0] = w + self.radius *(2 * idx_pad + 1)
-                self.ptype[idx + int(h/self.vol) * pad+ int(w/self.vol) * pad + int(h/self.vol) * idx_pad] = 0
+        if self.use_bp:
+            
+            h = self.boundary_info['height']
+            w = self.boundary_info['width']
+            dims = self.boundary_info['dims']
+            pad = self.boundary_info['pad']
+            
+            self.Nb = int(h/self.vol)*2 + int(w/self.vol)
+            self.Nb *= pad
+            self.Nt = self.Np + self.Nb
+            
+            self.r = np.zeros((self.Nt, dims))
+            self.ptype = np.ones((self.Nt,))
+            
+            # with padding
+            for idx_pad in range(0, int(pad)):
+                for idx in range(0,int(h/self.vol)):
+                    self.r[idx + int(h/self.vol) * idx_pad,0] = -self.radius * (2 * idx_pad + 1)
+                    self.r[idx + int(h/self.vol) * idx_pad,1] = self.radius * (2 * idx + 1)
+                    self.ptype[idx + int(h/self.vol) * idx_pad] = 0
+                    
+            for idx_pad in range(0, int(pad)):
+                for idx in range(0, int(w/self.vol)):
+                    self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad,0] = self.radius * (2 * idx + 1)
+                    self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad,1] = -self.radius * (2 * idx_pad + 1)
+                    self.ptype[idx + int(h/self.vol) * pad + int(w/self.vol) * idx_pad] = 0
+            
+            for idx_pad in range(0, int(pad)):
+                for idx in range(0,int(h/self.vol)):
+                    self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * pad + int(h/self.vol) * idx_pad,1] = self.radius * (2 * idx + 1)
+                    self.r[idx + int(h/self.vol) * pad + int(w/self.vol) * pad + int(h/self.vol) * idx_pad,0] = w + self.radius *(2 * idx_pad + 1)
+                    self.ptype[idx + int(h/self.vol) * pad+ int(w/self.vol) * pad + int(h/self.vol) * idx_pad] = 0
+                    
+        else:
+            
+            self.Nt = self.Np
+            dims = self.boundary_info['dims']
+            
+            self.r = np.zeros((self.Nt, dims))
+            self.ptype = np.ones((self.Nt,))
     
     def initialize_particles(self):
         
@@ -144,7 +156,7 @@ class SPHsolver:
         self.update_mass()
             
         # boundary condition
-        self.update_boundary() 
+        # self.update_boundary() 
         
         # momentum condition
         self.update_momentum()
@@ -174,7 +186,7 @@ class SPHsolver:
             self.update_mass()
                 
             # boundary condition
-            self.update_boundary() 
+            # self.update_boundary() 
             
             # momentum condition
             self.update_momentum()
