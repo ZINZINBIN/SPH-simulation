@@ -76,6 +76,7 @@ class SPHsolver:
         self.plot_freq = plot_freq
         self.plot_boundary_particle = plot_boundary_particle
         self.monitor = Monitor(
+            n_particle=Np,
             plot_freq = plot_freq, 
             boundary_info = boundary_info, 
             t_stats = self.ts, 
@@ -124,7 +125,6 @@ class SPHsolver:
                     self.ptype[idx + int(h/self.vol) * pad+ int(w/self.vol) * pad + int(h/self.vol) * idx_pad] = 0
                     
         else:
-            
             self.Nt = self.Np
             dims = self.boundary_info['dims']
             
@@ -154,7 +154,7 @@ class SPHsolver:
         
         # mass conservation
         self.update_mass()
-            
+        
         # boundary condition
         # self.update_boundary() 
         
@@ -164,7 +164,6 @@ class SPHsolver:
         # correct reflection
         self.correct_reflection()
             
-        
         # animation
         if self.plot_boundary_particle:
             self.monitor.update(self.r[self.ptype==1], self.r[self.ptype==0])
@@ -173,8 +172,8 @@ class SPHsolver:
             
         if self.verbose:
             end_time = time.time()
-            print("# t = {:.3f}, run time : {:.3f}".format(t, end_time - start_time))
-        
+            print("# t={:.3f}, run time:{:.3f}, P:{:.3f}, rho:{:.3f}, u:{:.3f}".format(t,end_time - start_time, np.average(self.P), np.average(self.rho), np.average(self.u)))
+            
         return self.monitor.points,
         
     def solve(self):
@@ -195,7 +194,7 @@ class SPHsolver:
             self.correct_reflection()
             
             if count % self.plot_freq == 0:
-                print("t = {:.6f}, umax = {:.3f}".format(t, np.max(np.linalg.norm(self.u, axis = 1))))
+                print("# t={:.3f}, P:{:.3f}, rho:{:.3f}, u:{:.3f}".format(t, np.average(self.P), np.average(self.rho), np.average(self.u)))
                 
             count += 1
     

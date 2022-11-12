@@ -1,3 +1,9 @@
+'''
+ some reference : 
+ (1) https://devocean.sk.com/blog/techBoardDetail.do?ID=163669, for multi-processing and shared memory in python
+
+'''
+
 import numpy as np
 import time
 from typing import Dict, Optional, Callable, List
@@ -7,10 +13,10 @@ from src.correct import KGC, DFPM
 from src.force import compute_pressure, compute_du_viscous, compute_du_pressure, compute_du_gravity
 from src.visualize import Monitor
 from tqdm.auto import tqdm
-from src.utils import seed_everything
-import multiprocessing
+from src.utils import seed_everything, to_numpy_array
+import multiprocessing as mp
 from functools import partial
-import gc
+import gc, ctypes
 
 # For 2D SPH solver
 class SPHsolver:
@@ -62,13 +68,37 @@ class SPHsolver:
         self.initialize_particles()
         
         # physical parameter
-        self.P = np.zeros((self.Nt,))
-        self.rho = np.ones((self.Nt,)) * rho
+        # self.P_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
+        # self.rho_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
+        # self.u_shared = mp.Array(ctypes.c_double, self.Nt * self.boundary_info['dims'], lock=False)
+        
+        # self.P = to_numpy_array(self.P_shared, (self.Nt,))
+        # self.rho = to_numpy_array(self.rho_shared, (self.Nt,))
+        
+        # for idx in range(0,self.Nt):
+        #     self.rho[idx] = rho
+        
+        # self.u = to_numpy_array(self.u_shared, (self.Nt, self.boundary_info['dims']))
+        
+        
+        global P_shared, rho_shared, u_shared
+        
+        P_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
+        rho_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
+        u_shared = mp.Array(ctypes.c_double, self.Nt * self.boundary_info['dims'], lock=False)
+        
+        self.P = to_numpy_array(P_shared, (self.Nt,))
+        self.rho = to_numpy_array(rho_shared, (self.Nt,))
+        
+        for idx in range(0,self.Nt):
+            self.rho[idx] = rho
+        
+        self.u = to_numpy_array(u_shared, (self.Nt, self.boundary_info['dims']))
+        
         self.rho0 = np.ones((self.Nt,)) * rho
         self.mu = np.ones((self.Nt,)) * mu
         self.m = np.ones((self.Nt,)) * rho * radius ** 2 * np.pi
-        self.u = np.zeros_like(self.r)
-        self.du_dt = np.zeros_like(self.r)
+        
         self.C = C
         self.g = g
         
@@ -79,6 +109,7 @@ class SPHsolver:
         self.plot_freq = plot_freq
         self.plot_boundary_particle = plot_boundary_particle
         self.monitor = Monitor(
+            n_particle=Np,
             plot_freq = plot_freq, 
             boundary_info = boundary_info, 
             t_stats = self.ts, 
@@ -90,15 +121,7 @@ class SPHsolver:
         self.verbose = verbose
         
         # multi-processing
-        self.n_jobs = multiprocessing.cpu_count()
-        
-        # buffer for multi-processing
-        self.P_tmp = np.zeros((self.Nt,))
-        self.rho_tmp = np.zeros((self.Nt,))
-        self.drho_dt_tmp = np.zeros((self.Nt,))
-        self.u_tmp = np.zeros_like(self.r)
-        self.du_dt_tmp = np.zeros_like(self.r)
-        
+        self.n_jobs = mp.cpu_count()
         print("multi-processing : {}-cpu will be used".format(self.n_jobs))
         
         
@@ -108,15 +131,15 @@ class SPHsolver:
         exec(idx, adj_idx, W_Wd, dW_Wd)        
     
     def compute_multi_process(self, exec : Callable):
-        
+          
         particles = [idx for idx in range(0,self.Nt)]
         
-        pool = multiprocessing.Pool(processes=self.n_jobs)
+        pool = mp.Pool(processes=self.n_jobs)
         compute_per_procs = partial(
             self.compute_per_process,
             exec = exec
         )
-        
+
         pool.map(compute_per_procs, particles)
         pool.close()
         pool.join()
@@ -190,7 +213,7 @@ class SPHsolver:
         
         # mass conservation
         self.compute_multi_process(self.update_mass)
-        
+         
         # update pressure
         self.P = compute_pressure(self.rho, self.rho0, self.C)
             
@@ -199,7 +222,7 @@ class SPHsolver:
         
         # correct reflection
         self.compute_multi_process(self.correct_reflection)
-        
+     
         # animation
         if self.plot_boundary_particle:
             self.monitor.update(self.r[self.ptype==1], self.r[self.ptype==0])
@@ -208,7 +231,7 @@ class SPHsolver:
             
         if self.verbose:
             end_time = time.time()
-            print("# t = {:.3f}, run time : {:.3f}".format(t, end_time - start_time))
+            print("# t = {:.3f}, run time : {:.3f}, P : {:.3f}, rho : {:.3f}, u : {:.3f}".format(t, end_time - start_time, np.average(self.P), np.average(self.rho), np.average(self.u)))
             
         # empty cache
         gc.collect()
@@ -216,14 +239,18 @@ class SPHsolver:
         return self.monitor.points,
     
     def update_mass(self, idx, adj_idx, W_Wd, dW_Wd):
-        self.drho_dt_tmp[idx] = self.rho[idx] * np.sum(self.m[adj_idx] / self.rho[adj_idx] * np.sum(dW_Wd * (self.u[idx] - self.u[adj_idx]), axis = 1), axis = 0)
-        self.rho[idx] += self.dt * self.drho_dt_tmp[idx]
+        drho_dt_tmp = self.rho[idx] * np.sum(self.m[adj_idx] / self.rho[adj_idx] * np.sum(dW_Wd * (self.u[idx] - self.u[adj_idx]), axis = 1), axis = 0)
+        self.rho[idx] += self.dt * drho_dt_tmp
+
+        return None
         
     def update_momentum(self,idx, adj_idx, W_Wd, dW_Wd):
         du_dt = compute_du_pressure(self.rho, self.m, self.C, idx, adj_idx, dW_Wd) + compute_du_viscous(self.rho, self.mu, self.r, self.m, self.u, idx, adj_idx, dW_Wd) + compute_du_gravity(self.u, idx, adj_idx, self.g)
  
-        self.u[idx,:] = self.u[idx,:] + self.dt * du_dt * (self.ptype[idx] == 1).reshape(-1,1)
-        self.r[idx,:] = self.r[idx,:] + self.dt * self.u[idx,:] * (self.ptype[idx] == 1).reshape(-1,1)
+        self.u[idx,:] += self.dt * du_dt * (self.ptype[idx] == 1)
+        self.r[idx,:] += self.dt * self.u[idx,:] * (self.ptype[idx] == 1)
+    
+        return None
             
     def shepard_filter(self, adj_idx : np.array, W_Wd : np.ndarray):
         flt_s = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd, axis = 0)
@@ -245,3 +272,5 @@ class SPHsolver:
         if self.r[idx,1] < 0:
             self.r[idx,1] = 0
             self.u[idx,1] *= (-1)
+            
+        return None

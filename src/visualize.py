@@ -2,9 +2,10 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Dict, Callable, List, Optional, Tuple
+import time
 
 class Monitor:
-    def __init__(self, plot_freq : int, boundary_info : Dict, t_stats : np.array, figsize : Tuple[int,int]= (10,6), blit : bool = True, save_dir : str = "./result/simulation.gif"):
+    def __init__(self, n_particle : int, plot_freq : int, boundary_info : Dict, t_stats : np.array, figsize : Tuple[int,int]= (10,6), blit : bool = True, save_dir : str = "./result/simulation.gif"):
         self.fig = plt.figure(figsize = figsize)
         self.axes = self.fig.add_subplot(xlim = (0, boundary_info['width'] * 1.5), ylim = (0, boundary_info['height'] * 1.5))
         self.axes.axvline(x = boundary_info['width'], ymin = 0, ymax = boundary_info['height'])
@@ -15,6 +16,8 @@ class Monitor:
         self.blit = blit
         self.save_dir = save_dir
         self.plot_freq = plot_freq
+        self.boundary_info = boundary_info
+        self.n_particle = n_particle
         
     def update(self, r : np.ndarray, boundary : Optional[np.ndarray] = None):
         self.frame += 1
@@ -24,6 +27,15 @@ class Monitor:
             self.boundary.set_data(boundary[:,0], boundary[:,1])
         
     def animate(self, exec : Callable[[int], List]):
+        
+        start_time = time.time()
+        
         ani = animation.FuncAnimation(self.fig, exec, frames = self.t_stats, blit = self.blit)
         writergif = animation.PillowWriter(fps = self.plot_freq)
         ani.save(self.save_dir, writergif)
+        
+        end_time = time.time()
+        
+        print("| computation clear | condition : (h:{:.2f}, w:{:.2f}, t:{:.2f}, num particle:{}) | run time : {:.2f} |".format(
+            self.boundary_info['height'], self.boundary_info['width'], self.t_stats[-1], self.n_particle, end_time - start_time
+        ))

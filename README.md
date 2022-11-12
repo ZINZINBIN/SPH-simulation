@@ -8,9 +8,10 @@
 
 ## Result
 <div>
-    <p>Simulation result for 2D</p>
+    <p>Simulation result for 2D(left : single, right : parallel)</p>
     <p float = "left">
         <img src="/result/simulation.gif"  width="320" height="196">
+        <img src="/result/simulation-parallel.gif"  width="320" height="196">
     </p>
 </div>
 

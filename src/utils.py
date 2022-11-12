@@ -12,3 +12,7 @@ def seed_everything(seed_num : int = 42, use_nn : bool = False)->None:
         os.environ["PYTHONHASHSEED"] = str(seed_num)
     except:
         pass
+    
+def to_numpy_array(shared_array, shape):
+    arr = np.ctypeslib.as_array(shared_array)
+    return arr.reshape(shape)
