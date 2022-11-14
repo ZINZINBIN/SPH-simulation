@@ -1,4 +1,3 @@
-import numpy as np
 import argparse
 from src.SPH import SPHsolver
 
@@ -21,6 +20,7 @@ parser.add_argument("--use_bp", type = bool, default = False)
 parser.add_argument("--plot_freq", type = int, default = 50)
 parser.add_argument("--plot_boundary_particle", type = bool, default = False)
 parser.add_argument("--verbose", type = bool, default = True)
+parser.add_argument("--gamma", type = float, default = 1.0)
 
 args = vars(parser.parse_args())
 
@@ -44,6 +44,7 @@ if __name__ == "__main__":
         g = args['g'],
         radius = args['radius'],
         kn = args['kn'],    
+        gamma = args['gamma'],
         kernel_type=args['kernel_type'],
         cor_type = args['cor_type'],
         use_bp = args['use_bp'],

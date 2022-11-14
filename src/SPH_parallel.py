@@ -1,9 +1,8 @@
-'''
+''' SPH solver using multi-processing (CPU)
  some reference : 
  (1) https://devocean.sk.com/blog/techBoardDetail.do?ID=163669, for multi-processing and shared memory in python
 
 '''
-
 import numpy as np
 import time
 from typing import Dict, Optional, Callable, List
@@ -32,6 +31,7 @@ class SPHsolver:
         g : float = 9.8,
         radius : float = 0.05,
         kn : int = 2,
+        gamma : float = 0.1,
         kernel_type : str = 'gaussian',
         cor_type : str = 'DFPM',
         use_bp : bool = False,
@@ -68,21 +68,6 @@ class SPHsolver:
         self.initialize_particles()
         
         # physical parameter
-        # self.P_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
-        # self.rho_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
-        # self.u_shared = mp.Array(ctypes.c_double, self.Nt * self.boundary_info['dims'], lock=False)
-        
-        # self.P = to_numpy_array(self.P_shared, (self.Nt,))
-        # self.rho = to_numpy_array(self.rho_shared, (self.Nt,))
-        
-        # for idx in range(0,self.Nt):
-        #     self.rho[idx] = rho
-        
-        # self.u = to_numpy_array(self.u_shared, (self.Nt, self.boundary_info['dims']))
-        
-        
-        global P_shared, rho_shared, u_shared
-        
         P_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
         rho_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
         u_shared = mp.Array(ctypes.c_double, self.Nt * self.boundary_info['dims'], lock=False)
@@ -101,8 +86,9 @@ class SPHsolver:
         
         self.C = C
         self.g = g
+        self.gamma = gamma
         
-        steps = round((tf-ti)/dt)
+        steps = round((tf-ti)/dt) + 1
         self.ts = np.linspace(ti, tf, steps)
         
         # video configuration
@@ -124,26 +110,30 @@ class SPHsolver:
         self.n_jobs = mp.cpu_count()
         print("multi-processing : {}-cpu will be used".format(self.n_jobs))
         
-        
     def compute_per_process(self, idx : int, exec : Callable):
         adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
         W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-        exec(idx, adj_idx, W_Wd, dW_Wd)        
+        exec(idx, adj_idx, W_Wd, dW_Wd)       
     
     def compute_multi_process(self, exec : Callable):
           
         particles = [idx for idx in range(0,self.Nt)]
         
-        pool = mp.Pool(processes=self.n_jobs)
         compute_per_procs = partial(
             self.compute_per_process,
             exec = exec
         )
-
-        pool.map(compute_per_procs, particles)
-        pool.close()
-        pool.join()
         
+        # use Process class
+        processes = []
+        for p in particles:
+            process = mp.Process(target = compute_per_procs, args = (p,))
+            processes.append(process)
+        
+        [proc.start() for proc in processes]
+        [proc.join() for proc in processes]
+        
+
     def animate(self):
         self.monitor.animate(self.update)
         
@@ -160,8 +150,14 @@ class SPHsolver:
             self.Nb *= pad
             self.Nt = self.Np + self.Nb
             
-            self.r = np.zeros((self.Nt, dims))
-            self.ptype = np.ones((self.Nt,))
+            r_shared = mp.Array(ctypes.c_double, self.Nt*dims, lock=False)
+            ptype_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
+            
+            self.r = to_numpy_array(r_shared, (self.Nt, dims))
+            self.ptype = to_numpy_array(ptype_shared, (self.Nt,))
+            
+            for i in range(self.Nt):
+                self.ptype[i] = 1
             
             # with padding
             for idx_pad in range(0, int(pad)):
@@ -186,8 +182,14 @@ class SPHsolver:
             self.Nt = self.Np
             dims = self.boundary_info['dims']
             
-            self.r = np.zeros((self.Nt, dims))
-            self.ptype = np.ones((self.Nt,))
+            r_shared = mp.Array(ctypes.c_double, self.Nt*dims, lock=False)
+            ptype_shared = mp.Array(ctypes.c_double, self.Nt, lock=False)
+            
+            self.r = to_numpy_array(r_shared, (self.Nt, dims))
+            self.ptype = to_numpy_array(ptype_shared, (self.Nt,))
+            
+            for i in range(self.Nt):
+                self.ptype[i] = 1
     
     def initialize_particles(self):
         
@@ -204,7 +206,6 @@ class SPHsolver:
             if h >= self.boundary_info['height'] * ratio:
                 h = self.radius
                 w += self.radius * 2
-          
       
     def update(self, t):
         
@@ -241,17 +242,13 @@ class SPHsolver:
     def update_mass(self, idx, adj_idx, W_Wd, dW_Wd):
         drho_dt_tmp = self.rho[idx] * np.sum(self.m[adj_idx] / self.rho[adj_idx] * np.sum(dW_Wd * (self.u[idx] - self.u[adj_idx]), axis = 1), axis = 0)
         self.rho[idx] += self.dt * drho_dt_tmp
-
-        return None
         
     def update_momentum(self,idx, adj_idx, W_Wd, dW_Wd):
         du_dt = compute_du_pressure(self.rho, self.m, self.C, idx, adj_idx, dW_Wd) + compute_du_viscous(self.rho, self.mu, self.r, self.m, self.u, idx, adj_idx, dW_Wd) + compute_du_gravity(self.u, idx, adj_idx, self.g)
  
         self.u[idx,:] += self.dt * du_dt * (self.ptype[idx] == 1)
         self.r[idx,:] += self.dt * self.u[idx,:] * (self.ptype[idx] == 1)
-    
-        return None
-            
+ 
     def shepard_filter(self, adj_idx : np.array, W_Wd : np.ndarray):
         flt_s = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd, axis = 0)
         W_Wd /= flt_s
@@ -263,14 +260,12 @@ class SPHsolver:
 
         if self.r[idx,0] > w:
             self.r[idx,0] = w
-            self.u[idx,0] *= (-1)
+            self.u[idx,0] *= (-1) * self.gamma
             
         elif self.r[idx,0] < 0:
             self.r[idx,0] = 0
-            self.u[idx,0] *= (-1)
+            self.u[idx,0] *= (-1) * self.gamma
             
         if self.r[idx,1] < 0:
             self.r[idx,1] = 0
-            self.u[idx,1] *= (-1)
-            
-        return None
+            self.u[idx,1] *= (-1) * self.gamma

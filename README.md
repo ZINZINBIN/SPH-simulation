@@ -5,6 +5,7 @@
 ## Detail
 - Density Approximation : use continuity equation 
 - Pressure Approximation : use equation of state 
+- Boundary condition : elastic collision (100% reflection) applied
 
 ## Result
 <div>

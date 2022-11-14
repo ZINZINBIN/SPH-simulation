@@ -23,6 +23,7 @@ class SPHsolver:
         g : float = 9.8,
         radius : float = 0.05,
         kn : int = 2,
+        gamma : float = 0.1,
         kernel_type : str = 'gaussian',
         cor_type : str = 'DFPM',
         use_bp : bool = False,
@@ -68,8 +69,9 @@ class SPHsolver:
         self.du_dt = np.zeros_like(self.r)
         self.C = C
         self.g = g
+        self.gamma = gamma
         
-        steps = round((tf-ti)/dt)
+        steps = round((tf-ti)/dt) + 1
         self.ts = np.linspace(ti, tf, steps)
         
         # video configuration
@@ -221,6 +223,7 @@ class SPHsolver:
         self.P = P
     
     def update_boundary(self):
+        
         # No-Penetration condition
         for idx in range(0,self.Nt):
             if self.ptype[idx] <= 0:
@@ -285,15 +288,15 @@ class SPHsolver:
         for idx in range(0,self.Nt):
     
             # x-axis
-            if self.r[idx,0] > w:
+            if self.r[idx,0] >= w:
                 self.r[idx,0] = w
-                self.u[idx,0] *= (-1)
+                self.u[idx,0] *= (-1) * self.gamma
                 
-            elif self.r[idx,0] < 0:
+            elif self.r[idx,0] <= 0:
                 self.r[idx,0] = 0
-                self.u[idx,0] *= (-1)
+                self.u[idx,0] *= (-1) * self.gamma
                 
             # y-axis
-            if self.r[idx,1] < 0:
+            if self.r[idx,1] <= 0:
                 self.r[idx,1] = 0
-                self.u[idx,1] *= (-1)
+                self.u[idx,1] *= (-1) * self.gamma

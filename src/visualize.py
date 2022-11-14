@@ -18,10 +18,16 @@ class Monitor:
         self.plot_freq = plot_freq
         self.boundary_info = boundary_info
         self.n_particle = n_particle
+        self.time_text = self.axes.text(0.9, 0.9, s = "", fontsize = 12, transform = self.axes.transAxes)
         
     def update(self, r : np.ndarray, boundary : Optional[np.ndarray] = None):
         self.frame += 1
-        self.points.set_data(r[:,0], r[:,1])
+        
+        if self.frame >= len(self.t_stats):
+            pass
+        else:
+            self.points.set_data(r[:,0], r[:,1])
+            self.time_text.set_text("t={:.3f}".format(self.t_stats[self.frame-1]))
         
         if boundary is not None:
             self.boundary.set_data(boundary[:,0], boundary[:,1])
