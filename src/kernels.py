@@ -14,7 +14,7 @@ def compute_kernel(r:Union[np.ndarray, np.array], h : float, kernel_type : Liter
         
     dims = r.shape[1]
     r_abs = np.linalg.norm(r, axis = 1)
-        
+    
     if kernel_type == 'gaussian':
         C = 1 / np.sqrt(np.pi) / h
         C = C ** dims
@@ -29,6 +29,7 @@ def compute_kernel(r:Union[np.ndarray, np.array], h : float, kernel_type : Liter
         else:
             alpha = 21 / 16 / np.pi / h**2
         pass
+    
     elif kernel_type == 'wendland2':
         if dims == 1:
             alpha = 5 / 8 / h

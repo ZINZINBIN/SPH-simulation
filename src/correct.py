@@ -4,6 +4,11 @@ from typing import Union
 # Kernel Gradient Correction
 def KGC(idx : int, adj_idx : np.array, r : np.ndarray, W_Wd : np.ndarray, dW_Wd:np.ndarray, m : Union[np.ndarray, np.array], rho : Union[np.ndarray, np.array]):
     # dW_Wd : np.ndarray, [adj_idx, d]
+    
+    # ignore the case where the adjacency particle does not exist -> Inverse matrix not exist
+    if len(adj_idx) >= 1:
+        return W_Wd, dW_Wd
+    
     dims = r.shape[1]
     dV = m / rho
     L = np.zeros((dims,dims))
@@ -12,7 +17,10 @@ def KGC(idx : int, adj_idx : np.array, r : np.ndarray, W_Wd : np.ndarray, dW_Wd:
         for idx_j in range(0,dims):
             L[idx_i, idx_j] = np.sum((r[adj_idx,idx_j] - r[idx,idx_j])*dW_Wd[:,idx_i]*dV[adj_idx])
     
-    L_inv = np.linalg.inv(L)
+    try:
+        L_inv = np.linalg.inv(L)
+    except:
+        L_inv = np.ones_like(L)
     
     W_Wd_cor = W_Wd
     dW_Wd_cor = np.matmul(L_inv, dW_Wd.T).T

@@ -1,7 +1,7 @@
 import argparse
-from src.SPH import SPHsolver
 
 parser = argparse.ArgumentParser(description="2D SPH simulation as my own project")
+parser.add_argument("--device", choices=["cpu", "multi-cpu","gpu"], default = "cpu")
 parser.add_argument("--height", type = float, default = 2.0)
 parser.add_argument("--width", type = float, default = 15.0)
 parser.add_argument("--num_particle", type = int, default = 1024)
@@ -33,26 +33,93 @@ if __name__ == "__main__":
         "pad":8,
     }
     
-    solver = SPHsolver(
-        Np = args['num_particle'],
-        ti = 0,
-        tf = args['end_time'],
-        dt = args['dt'],
-        mu = args['mu'],
-        rho = args['density'],
-        C = args['sound_speed'],
-        g = args['g'],
-        radius = args['radius'],
-        kn = args['kn'],    
-        gamma = args['gamma'],
-        kernel_type=args['kernel_type'],
-        cor_type = args['cor_type'],
-        use_bp = args['use_bp'],
-        plot_freq = args['plot_freq'],
-        plot_boundary_particle=args['plot_boundary_particle'],
-        boundary_info = Boundary_Info,
-        save_dir = "./result/{}.gif".format(args['tag']),
-        verbose = args['verbose']
-    )
+    device = args['device']
     
-    solver.animate()
+    if device == "cpu":
+        from src.SPH import SPHsolver
+        
+        print("# device : cpu")
+        
+        solver = SPHsolver(
+            Np = args['num_particle'],
+            ti = 0,
+            tf = args['end_time'],
+            dt = args['dt'],
+            mu = args['mu'],
+            rho = args['density'],
+            C = args['sound_speed'],
+            g = args['g'],
+            radius = args['radius'],
+            kn = args['kn'],    
+            gamma = args['gamma'],
+            kernel_type=args['kernel_type'],
+            cor_type = args['cor_type'],
+            use_bp = args['use_bp'],
+            plot_freq = args['plot_freq'],
+            plot_boundary_particle=args['plot_boundary_particle'],
+            boundary_info = Boundary_Info,
+            save_dir = "./result/{}.gif".format(args['tag']),
+            verbose = args['verbose']
+        )
+        
+        solver.animate()
+    
+    elif device == "multi-cpu":
+        
+        from src.SPH_parallel import SPHsolver
+        
+        print("# device : multi-cpu")
+        
+        solver = SPHsolver(
+            Np = args['num_particle'],
+            ti = 0,
+            tf = args['end_time'],
+            dt = args['dt'],
+            mu = args['mu'],
+            rho = args['density'],
+            C = args['sound_speed'],
+            g = args['g'],
+            radius = args['radius'],
+            kn = args['kn'],    
+            gamma = args['gamma'],
+            kernel_type=args['kernel_type'],
+            cor_type = args['cor_type'],
+            use_bp = args['use_bp'],
+            plot_freq = args['plot_freq'],
+            plot_boundary_particle=args['plot_boundary_particle'],
+            boundary_info = Boundary_Info,
+            save_dir = "./result/{}.gif".format(args['tag']),
+            verbose = args['verbose']
+        )
+        
+        solver.animate()
+        
+    elif device == "gpu":
+        
+        from src.SPH_GPU import SPHsolver
+        print("# device : gpu")
+        
+        solver = SPHsolver(
+            Np = args['num_particle'],
+            ti = 0,
+            tf = args['end_time'],
+            dt = args['dt'],
+            mu = args['mu'],
+            rho = args['density'],
+            C = args['sound_speed'],
+            g = args['g'],
+            radius = args['radius'],
+            kn = args['kn'],    
+            gamma = args['gamma'],
+            kernel_type=args['kernel_type'],
+            cor_type = args['cor_type'],
+            use_bp = args['use_bp'],
+            plot_freq = args['plot_freq'],
+            plot_boundary_particle=args['plot_boundary_particle'],
+            boundary_info = Boundary_Info,
+            save_dir = "./result/{}.gif".format(args['tag']),
+            verbose = args['verbose'],
+            device = 0
+        )
+        
+        solver.animate()

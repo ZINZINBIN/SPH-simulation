@@ -13,6 +13,7 @@ from typing import Union
 
 def NNPS(r : np.ndarray, ri : Union[np.ndarray, np.array], r_sup : float):
     m,n = r.shape # m : number of particle, n : dimension
+    
     r_abs = np.linalg.norm(r - ri, axis = 1)
     adj_indices = np.where(r_abs < r_sup)[0]
 

@@ -60,13 +60,13 @@ class SPHsolver:
         self.initialize_particles()
         
         # physical parameter
-        self.P = np.zeros((self.Nt,))
-        self.rho = np.ones((self.Nt,)) * rho
-        self.rho0 = np.ones((self.Nt,)) * rho
-        self.mu = np.ones((self.Nt,)) * mu
-        self.m = np.ones((self.Nt,)) * rho * radius ** 2 * np.pi
-        self.u = np.zeros_like(self.r)
-        self.du_dt = np.zeros_like(self.r)
+        self.P = np.zeros((self.Nt,), dtype = float)
+        self.rho = np.ones((self.Nt,), dtype = float) * rho
+        self.rho0 = np.ones((self.Nt,), dtype = float) * rho
+        self.mu = np.ones((self.Nt,), dtype = float) * mu
+        self.m = np.ones((self.Nt,), dtype = float) * rho * radius ** 2 * np.pi
+        self.u = np.zeros_like(self.r, dtype = float)
+        self.du_dt = np.zeros_like(self.r, dtype = float)
         self.C = C
         self.g = g
         self.gamma = gamma
@@ -90,7 +90,7 @@ class SPHsolver:
         
     def animate(self):
         self.monitor.animate(self.update)
-        
+    
     def initialize_boundary(self):
         
         if self.use_bp:
@@ -132,6 +132,9 @@ class SPHsolver:
             
             self.r = np.zeros((self.Nt, dims))
             self.ptype = np.ones((self.Nt,))
+            
+        
+        self.particle_indices = np.array([i for i in range(self.Nt)], dtype = np.int32)
     
     def initialize_particles(self):
         
@@ -148,7 +151,7 @@ class SPHsolver:
             if h >= self.boundary_info['height'] * ratio:
                 h = self.radius
                 w += self.radius * 2
-                
+           
     def update(self, t):
         
         if self.verbose:
@@ -177,7 +180,7 @@ class SPHsolver:
             print("# t={:.3f}, run time:{:.3f}, P:{:.3f}, rho:{:.3f}, u:{:.3f}".format(t,end_time - start_time, np.average(self.P), np.average(self.rho), np.average(self.u)))
             
         return self.monitor.points,
-        
+    
     def solve(self):
         
         count = 0
@@ -199,20 +202,17 @@ class SPHsolver:
                 print("# t={:.3f}, P:{:.3f}, rho:{:.3f}, u:{:.3f}".format(t, np.average(self.P), np.average(self.rho), np.average(self.u)))
                 
             count += 1
-    
+            
     def update_mass(self): # using continuity equation
-        rho = np.zeros_like(self.rho)
-        drho_dt = np.zeros_like(self.rho)
-        P = np.zeros_like(self.P)
         
-        for idx in range(0,self.Nt):
+        rho = np.zeros_like(self.rho, dtype = float)
+        drho_dt = np.zeros_like(self.rho, dtype = float)
+        P = np.zeros_like(self.P, dtype = float)
+        
+        for idx in self.particle_indices:
             adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
             W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-            
-            # if len(adj_idx) >= 2:
-            #     W_Wd, dW_Wd = KGC(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
-            #     W_Wd, dW_Wd = DFPM(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
-            
+            W_Wd, dW_Wd = KGC(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
             drho_dt[idx] = self.rho[idx] * np.sum(self.m[adj_idx] / self.rho[adj_idx] * np.sum(dW_Wd * (self.u[idx] - self.u[adj_idx]), axis = 1), axis = 0)
             
         # rho = self.rho + self.dt * drho_dt * (self.ptype == 1)
@@ -225,7 +225,7 @@ class SPHsolver:
     def update_boundary(self):
         
         # No-Penetration condition
-        for idx in range(0,self.Nt):
+        for idx in self.particle_indices:
             if self.ptype[idx] <= 0:
                 adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
                 W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
@@ -237,9 +237,8 @@ class SPHsolver:
                     is_particle = (self.ptype[adj_idx] == 1).reshape(-1,1)
                     self.u[idx, :] = (-1) * np.sum(m_rho * self.u[adj_idx, :] * W_Wd.reshape(-1,1) * is_particle, axis = 0) / flt
               
-        
         # Neumann Boundary condition     
-        for idx in range(0,self.Nt):
+        for idx in self.particle_indices:
             if self.ptype[idx] <= 0:
                 adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
                 W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
@@ -255,23 +254,18 @@ class SPHsolver:
                     
                     self.rho[idx] = self.P[idx] / self.C**2 + self.rho0[idx]
         
-        
     def update_momentum(self):
         
-        for idx in range(0,self.Nt):
+        for idx in self.particle_indices:
             adj_idx = NNPS(self.r, self.r[idx], self.r_sup)
             W_Wd, dW_Wd = compute_kernel((-1) * (self.r[adj_idx] - self.r[idx]), self.r_sup, self.kernel_type)
-            # W_Wd = self.shepard_filter(adj_idx, W_Wd)
-            
-            # if len(adj_idx) >= 2:
-            #     W_Wd, dW_Wd = KGC(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
-            #     W_Wd, dW_Wd = DFPM(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
-            
+            W_Wd, dW_Wd = KGC(idx, adj_idx, self.r, W_Wd, dW_Wd, self.m, self.rho)
+
             du_dt = compute_du_pressure(self.rho, self.m, self.C, idx, adj_idx, dW_Wd) + compute_du_viscous(self.rho, self.mu, self.r, self.m, self.u, idx, adj_idx, dW_Wd) + compute_du_gravity(self.u, idx, adj_idx, self.g)
  
             self.u[idx,:] = self.u[idx,:] + self.dt * du_dt * (self.ptype[idx] == 1).reshape(-1,1)
             self.r[idx,:] = self.r[idx,:] + self.dt * self.u[idx,:] * (self.ptype[idx] == 1).reshape(-1,1)
-            
+     
     def shepard_filter(self, adj_idx : np.array, W_Wd : np.ndarray):
         flt_s = np.sum(self.m[adj_idx] / self.rho[adj_idx] * W_Wd, axis = 0)
         W_Wd /= flt_s
@@ -285,7 +279,7 @@ class SPHsolver:
         w = self.boundary_info['width']
         
         # reflection condition
-        for idx in range(0,self.Nt):
+        for idx in self.particle_indices:
     
             # x-axis
             if self.r[idx,0] >= w:
